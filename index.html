@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>학습 결과 확인</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --ink: #1c2330; --sub: #5d6778;
+    --line: #d9dde5; --accent: #2f6fed; --accent-ink: #ffffff; --warn: #b45309;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171c; --card: #1e232b; --ink: #e8ebf0; --sub: #9aa4b5;
+      --line: #333a46; --accent: #6b9bff; --accent-ink: #0d1524; --warn: #fbbf24; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink);
+    font: 16px/1.5 "Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif; }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--card);
+    border-radius: 8px; padding: 8px 14px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.small { padding: 4px 10px; font-size: 14px; }
+  [hidden] { display: none !important; }
+
+  /* ---------- 만들기 화면 ---------- */
+  #editor { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+  #editor h1 { font-size: 26px; margin: 0 0 4px; }
+  #editor .lead { color: var(--sub); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
+  label { display: block; font-size: 14px; color: var(--sub); margin-bottom: 4px; }
+  input[type=text], textarea, select { width: 100%; background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 11px; }
+  textarea { min-height: 70px; resize: vertical; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > .grow { flex: 1 1 200px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-weight: 600; }
+  .hint { font-size: 13px; color: var(--sub); margin: 6px 0 0; }
+  .warn { color: var(--warn); font-size: 14px; }
+  #result { text-align: center; }
+  #result canvas { max-width: 100%; height: auto; border-radius: 8px; }
+  #shareUrl { font-size: 13px; }
+  footer.credits { font-size: 12px; color: var(--sub); margin-top: 24px; }
+  footer.credits a { color: inherit; }
+
+  /* ---------- 보기 화면 ---------- */
+  #viewer { height: 100%; display: flex; flex-direction: column; }
+  #bar button { flex: none; white-space: nowrap; }
+  #bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--card);
+    border-bottom: 1px solid var(--line); flex: none; }
+  #bar h1 { font-size: 17px; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #stage { flex: 1; min-height: 0; position: relative; }
+  .split { display: flex; width: 100%; height: 100%; }
+  .split.v { flex-direction: column; }
+  .split > .split { min-width: 0; min-height: 0; }
+  .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; background: var(--card); }
+  .pane-head { display: flex; align-items: center; gap: 6px; padding: 3px 8px; font-size: 14px; font-weight: 600;
+    border-bottom: 1px solid var(--line); flex: none; }
+  .pane-head .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pane-head a, .pane-head button { font-size: 13px; font-weight: 400; color: var(--sub); text-decoration: none;
+    border: 0; background: none; padding: 2px 6px; }
+  .pane-body { flex: 1; min-height: 0; overflow: auto; }
+  .pane-body iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+  .pane-body img { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .pane-body .text { padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 18px; }
+  .pane.max { position: absolute; inset: 0; z-index: 5; width: auto !important; height: auto !important; }
+  .gutter { background: var(--line); flex: none; touch-action: none; }
+  .gutter:hover, .dragging .gutter { background: var(--accent); }
+  .gutter.gutter-horizontal { cursor: col-resize; }
+  .gutter.gutter-vertical { cursor: row-resize; }
+  .dragging iframe { pointer-events: none; }
+
+  #qrModal { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 20;
+    display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #qrModal .box { background: #fff; color: #111; border-radius: 14px; padding: 18px; text-align: center; max-width: 100%; }
+  #qrModal canvas { max-width: 100%; max-height: 70vh; height: auto; width: auto; }
+  #qrModal p { margin: 8px 0 0; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- 만들기 화면 -->
+<main id="editor" hidden>
+  <h1>학습 결과 확인 페이지 만들기</h1>
+  <p class="lead">학습 결과(링크·이미지·글)를 칸마다 넣으면, QR로 접속해 분할 화면으로 볼 수 있는 주소가 만들어집니다.</p>
+
+  <div class="card">
+    <div class="row">
+      <div class="grow">
+        <label for="title">제목</label>
+        <input type="text" id="title" placeholder="예: 3모둠 탐구 활동 결과" maxlength="60">
+      </div>
+      <div>
+        <label for="layout">화면 분할</label>
+        <select id="layout">
+          <option value="c">좌우로 나란히</option>
+          <option value="r">위아래로</option>
+          <option value="g">격자(2열)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div id="panels"></div>
+  <div class="row" style="margin-bottom:14px">
+    <button id="addPanel">+ 칸 추가</button>
+    <span class="hint" style="margin:0">최대 6칸</span>
+  </div>
+
+  <button class="primary" id="make" style="width:100%;padding:12px">URL · QR 만들기</button>
+
+  <div class="card" id="result" hidden style="margin-top:14px">
+    <p class="warn" id="localWarn" hidden>지금은 내 컴퓨터의 파일로 열려 있어, 이 QR은 다른 기기에서 열리지 않습니다. 웹(GitHub Pages 등)에 올린 주소에서 만들어 주세요.</p>
+    <canvas id="qr"></canvas>
+    <p class="warn" id="qrWarn" hidden></p>
+    <div class="row" style="margin-top:10px">
+      <input type="text" id="shareUrl" class="grow" readonly>
+    </div>
+    <div class="row" style="justify-content:center;margin-top:10px">
+      <button id="copy">주소 복사</button>
+      <button id="savePng">QR 이미지 저장</button>
+      <button class="primary" id="open">분할 화면 열기</button>
+    </div>
+  </div>
+
+  <footer class="credits">
+    사용한 오픈 소스(모두 MIT 라이선스):
+    <a href="https://github.com/nathancahill/split" target="_blank" rel="noopener">Split.js</a> ·
+    <a href="https://github.com/kazuhikoarase/qrcode-generator" target="_blank" rel="noopener">qrcode-generator</a> ·
+    <a href="https://github.com/pieroxy/lz-string" target="_blank" rel="noopener">lz-string</a>
+  </footer>
+</main>
+
+<!-- 보기 화면 -->
+<div id="viewer" hidden>
+  <div id="bar">
+    <h1 id="vTitle"></h1>
+    <button class="small" id="vLayout" title="분할 방향 바꾸기">분할 전환</button>
+    <button class="small" id="vQr">QR</button>
+    <button class="small" id="vEdit">편집</button>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<div id="qrModal" hidden>
+  <div class="box">
+    <canvas id="qrBig"></canvas>
+    <p>QR을 찍으면 이 화면이 열립니다 · 아무 곳이나 누르면 닫힘</p>
+  </div>
+</div>
+
+<script src="vendor/lz-string.min.js"></script>
+<script src="vendor/qrcode.js"></script>
+<script src="vendor/split.min.js"></script>
+<script>
+(function () {
+  'use strict';
+  var MAX_PANELS = 6;
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------- 상태 <-> 주소 ---------- */
+  // 상태: { t: 제목, l: 'c'|'r'|'g', p: [[이름, 내용], ...] }
+  function encode(state) {
+    return LZString.compressToEncodedURIComponent(JSON.stringify(state));
+  }
+  function decode(str) {
+    try {
+      var s = JSON.parse(LZString.decompressFromEncodedURIComponent(str));
+      if (!s || !Array.isArray(s.p)) return null;
+      return {
+        t: String(s.t || ''),
+        l: ['c', 'r', 'g'].indexOf(s.l) >= 0 ? s.l : 'c',
+        p: s.p.slice(0, MAX_PANELS).map(function (x) { return [String(x[0] || ''), String(x[1] || '')]; })
+      };
+    } catch (e) { return null; }
+  }
+  function baseUrl() { return location.href.split('#')[0]; }
+  function readHash() {
+    var m = /^#([de])=(.+)$/.exec(location.hash);
+    return m ? { mode: m[1], state: decode(m[2]) } : null;
+  }
+
+  /* ---------- QR ---------- */
+  function drawQr(canvas, text, targetPx) {
+    var qr = qrcode(0, 'M');           // 0 = 크기 자동
+    qr.addData(text);
+    qr.make();                         // 너무 길면 여기서 예외
+    var n = qr.getModuleCount(), quiet = 4;
+    var cell = Math.max(2, Math.floor(targetPx / (n + quiet * 2)));
+    var size = (n + quiet * 2) * cell;
+    canvas.width = canvas.height = size;
+    var ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#000';
+    for (var r = 0; r < n; r++) for (var c = 0; c < n; c++)
+      if (qr.isDark(r, c)) ctx.fillRect((c + quiet) * cell, (r + quiet) * cell, cell, cell);
+    return n;
+  }
+
+  /* ---------- 내용 해석 ---------- */
+  // 반환: {kind:'frame'|'image'|'text', src, href}
+  function interpret(raw) {
+    var v = raw.trim();
+    if (!/^https?:\/\/\S+$/i.test(v)) return { kind: 'text', text: raw };
+    var u;
+    try { u = new URL(v); } catch (e) { return { kind: 'text', text: raw }; }
+    var host = u.hostname.replace(/^www\./, ''), m;
+    if (/\.(png|jpe?g|gif|webp|svg|avif)$/i.test(u.pathname)) return { kind: 'image', src: v, href: v };
+    // YouTube
+    if (host === 'youtu.be' && u.pathname.length > 1)
+      return { kind: 'frame', src: 'https://www.youtube.com/embed/' + encodeURIComponent(u.pathname.slice(1)), href: v };
+    if (/(^|\.)youtube\.com$/.test(host)) {
+      if (u.pathname === '/watch' && u.searchParams.get('v'))
+        return { kind: 'frame', src: 'https://www.youtube.com/embed/' + encodeURIComponent(u.searchParams.get('v')), href: v };
+      if ((m = /^\/(?:shorts|live)\/([^/]+)/.exec(u.pathname)))
+        return { kind: 'frame', src: 'https://www.youtube.com/embed/' + encodeURIComponent(m[1]), href: v };
+    }
+    // Google 문서·슬라이드·시트 / 드라이브 파일 → 미리보기 주소
+    if (host === 'docs.google.com' && (m = /^\/(document|presentation|spreadsheets)\/d\/([^/]+)/.exec(u.pathname)))
+      return { kind: 'frame', src: 'https://docs.google.com/' + m[1] + '/d/' + m[2] + '/preview', href: v };
+    if (host === 'drive.google.com' && (m = /^\/file\/d\/([^/]+)/.exec(u.pathname)))
+      return { kind: 'frame', src: 'https://drive.google.com/file/d/' + m[1] + '/preview', href: v };
+    return { kind: 'frame', src: v, href: v };
+  }
+
+  /* ---------- 보기 화면 ---------- */
+  var current = null, viewLayout = 'c';
+
+  function buildPane(item, idx) {
+    var info = interpret(item[1]);
+    var pane = document.createElement('section'); pane.className = 'pane';
+    var head = document.createElement('div'); head.className = 'pane-head';
+    var name = document.createElement('span'); name.className = 'name';
+    name.textContent = item[0] || ('결과 ' + (idx + 1));
+    head.appendChild(name);
+    if (info.href) {
+      var a = document.createElement('a');
+      a.href = info.href; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '새 탭 ↗';
+      head.appendChild(a);
+    }
+    var mx = document.createElement('button'); mx.textContent = '크게';
+    mx.onclick = function () {
+      var on = pane.classList.toggle('max');
+      mx.textContent = on ? '분할로' : '크게';
+    };
+    head.appendChild(mx);
+    var body = document.createElement('div'); body.className = 'pane-body';
+    if (info.kind === 'frame') {
+      var f = document.createElement('iframe');
+      f.src = info.src; f.loading = 'lazy';
+      f.allow = 'fullscreen; picture-in-picture'; f.allowFullscreen = true;
+      f.title = name.textContent;
+      body.appendChild(f);
+    } else if (info.kind === 'image') {
+      var img = document.createElement('img'); img.src = info.src; img.alt = name.textContent;
+      img.referrerPolicy = 'no-referrer';
+      body.appendChild(img);
+    } else {
+      var t = document.createElement('div'); t.className = 'text'; t.textContent = info.text;
+      body.appendChild(t);
+    }
+    pane.appendChild(head); pane.appendChild(body);
+    return pane;
+  }
+
+  function splitOf(container, children, direction) {
+    container.className = 'split ' + (direction === 'vertical' ? 'v' : 'h');
+    children.forEach(function (c) { container.appendChild(c); });
+    if (children.length < 2) { children[0].style.flex = '1'; return; }
+    Split(children, {
+      direction: direction, gutterSize: 10, minSize: 50, snapOffset: 0,
+      onDragStart: function () { $('stage').classList.add('dragging'); },
+      onDragEnd: function () { $('stage').classList.remove('dragging'); }
+    });
+  }
+
+  function renderView() {
+    var stage = $('stage'); stage.innerHTML = '';
+    var panes = current.p.map(buildPane);
+    var root = document.createElement('div');
+    stage.appendChild(root);
+    if (viewLayout === 'g' && panes.length > 2) {
+      var rows = [];
+      for (var i = 0; i < panes.length; i += 2) {
+        var row = document.createElement('div');
+        rows.push(row);
+      }
+      splitOf(root, rows, 'vertical');
+      rows.forEach(function (row, k) { splitOf(row, panes.slice(k * 2, k * 2 + 2), 'horizontal'); });
+    } else {
+      splitOf(root, panes, viewLayout === 'r' ? 'vertical' : 'horizontal');
+    }
+  }
+
+  function showViewer(state) {
+    current = state;
+    // 세로로 긴 휴대폰 화면에서 '좌우'는 너무 좁으므로 위아래로 시작
+    viewLayout = (state.l === 'c' && window.innerWidth < 640 && window.innerHeight > window.innerWidth) ? 'r' : state.l;
+    $('editor').hidden = true; $('viewer').hidden = false;
+    $('vTitle').textContent = state.t || '학습 결과 확인';
+    document.title = state.t || '학습 결과 확인';
+    renderView();
+  }
+
+  $('vLayout').onclick = function () {
+    var order = current.p.length > 2 ? ['c', 'r', 'g'] : ['c', 'r'];
+    viewLayout = order[(order.indexOf(viewLayout) + 1) % order.length];
+    renderView();
+  };
+  $('vQr').onclick = function () {
+    try { drawQr($('qrBig'), baseUrl() + '#d=' + encode(current), 520); $('qrModal').hidden = false; }
+    catch (e) { alert('내용이 너무 길어 QR로 만들 수 없습니다.'); }
+  };
+  $('qrModal').onclick = function () { $('qrModal').hidden = true; };
+  $('vEdit').onclick = function () { location.hash = '#e=' + encode(current); };
+
+  /* ---------- 만들기 화면 ---------- */
+  function addPanelCard(name, content) {
+    var wrap = $('panels');
+    if (wrap.children.length >= MAX_PANELS) return;
+    var card = document.createElement('div'); card.className = 'card panel';
+    card.innerHTML =
+      '<div class="panel-head"><span class="no"></span><button class="small del">삭제</button></div>' +
+      '<label>이름</label><input type="text" class="p-name" maxlength="40" placeholder="예: 1모둠, 홍길동">' +
+      '<label style="margin-top:10px">학습 결과 (웹 주소 또는 글)</label>' +
+      '<textarea class="p-content" placeholder="https://… 로 시작하는 주소(웹페이지·구글 문서/슬라이드·유튜브·이미지)를 넣거나, 글을 직접 적으세요."></textarea>';
+    card.querySelector('.p-name').value = name || '';
+    card.querySelector('.p-content').value = content || '';
+    card.querySelector('.del').onclick = function () { card.remove(); renumber(); };
+    wrap.appendChild(card);
+    renumber();
+  }
+  function renumber() {
+    var cards = $('panels').children;
+    for (var i = 0; i < cards.length; i++) {
+      cards[i].querySelector('.no').textContent = (i + 1) + '번 칸';
+      cards[i].querySelector('.del').hidden = cards.length <= 1;
+    }
+    $('addPanel').disabled = cards.length >= MAX_PANELS;
+  }
+  function collect() {
+    var p = [];
+    Array.prototype.forEach.call($('panels').children, function (card) {
+      var n = card.querySelector('.p-name').value.trim();
+      var c = card.querySelector('.p-content').value.trim();
+      if (c) p.push([n, c]);
+    });
+    return { t: $('title').value.trim(), l: $('layout').value, p: p };
+  }
+
+  function showEditor(state) {
+    $('viewer').hidden = true; $('editor').hidden = false; $('result').hidden = true;
+    document.title = '학습 결과 확인 페이지 만들기';
+    $('panels').innerHTML = '';
+    if (state) {
+      $('title').value = state.t; $('layout').value = state.l;
+      state.p.forEach(function (x) { addPanelCard(x[0], x[1]); });
+    }
+    while ($('panels').children.length < 2) addPanelCard();
+  }
+
+  $('addPanel').onclick = function () { addPanelCard(); };
+  $('make').onclick = function () {
+    var state = collect();
+    if (!state.p.length) { alert('학습 결과를 한 칸 이상 입력해 주세요.'); return; }
+    var url = baseUrl() + '#d=' + encode(state);
+    $('shareUrl').value = url;
+    $('result').hidden = false;
+    $('localWarn').hidden = location.protocol !== 'file:';
+    var warn = $('qrWarn'); warn.hidden = true; $('qr').hidden = false; $('savePng').disabled = false;
+    try {
+      var n = drawQr($('qr'), url, 360);
+      if (n > 101) { warn.textContent = '내용이 길어 QR이 촘촘합니다. 크게 띄우거나, 긴 글 대신 링크를 넣으면 더 잘 찍힙니다.'; warn.hidden = false; }
+    } catch (e) {
+      $('qr').hidden = true; $('savePng').disabled = true;
+      warn.textContent = '내용이 너무 길어 QR로 만들 수 없습니다. 주소는 그대로 쓸 수 있습니다. 긴 글은 문서 링크로 바꿔 보세요.';
+      warn.hidden = false;
+    }
+    $('result').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  $('copy').onclick = function () {
+    var inp = $('shareUrl'), btn = this;
+    var done = function () { btn.textContent = '복사됨'; setTimeout(function () { btn.textContent = '주소 복사'; }, 1500); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(inp.value).then(done);
+    else { inp.select(); document.execCommand('copy'); done(); }
+  };
+  $('savePng').onclick = function () {
+    var big = document.createElement('canvas');
+    drawQr(big, $('shareUrl').value, 1000);
+    var a = document.createElement('a');
+    a.download = ($('title').value.trim() || '학습결과') + '_QR.png';
+    a.href = big.toDataURL('image/png'); a.click();
+  };
+  $('open').onclick = function () { window.open($('shareUrl').value, '_blank'); };
+
+  /* ---------- 라우팅 ---------- */
+  function route() {
+    var h = readHash();
+    if (h && h.state && h.mode === 'd' && h.state.p.length) showViewer(h.state);
+    else showEditor(h && h.state);
+  }
+  window.addEventListener('hashchange', route);
+  route();
+})();
+</script>
+</body>
+</html>
