@@ -82,6 +82,25 @@
   .grip { cursor: grab; padding: 2px 8px 2px 0; color: var(--sub); touch-action: none; }
   .sortable-ghost { opacity: .35; }
   details.card summary { cursor: pointer; font-weight: 600; }
+  #editor h2 { font-size: 18px; margin: 22px 0 8px; }
+  #editor .card h2 { margin-top: 0; }
+  #liveCard { border-color: var(--accent); }
+  #myRooms a { color: var(--accent); }
+  /* 실시간 방 */
+  #bar { flex-wrap: wrap; }
+  #vStatus { font-size: 12px; color: var(--sub); flex: none; }
+  #vStatus.bad { color: var(--warn); }
+  .livegrid { display: grid; gap: 6px; width: 100%; height: 100%; background: var(--line); }
+  .live-empty { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; padding: 16px; text-align: center; overflow: auto; }
+  .live-empty canvas { max-width: min(70vw, 340px); height: auto; border-radius: 10px; }
+  .live-empty p { margin: 0; font-size: 18px; }
+  .live-empty small { color: var(--sub); overflow-wrap: anywhere; }
+  #mineModal { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 20;
+    display: flex; align-items: center; justify-content: center; padding: 16px; }
+  #mineModal .box { background: var(--card); border-radius: 14px; padding: 18px; width: 100%; max-width: 480px; max-height: 100%; overflow: auto; }
+  #mineModal h2 { margin: 0 0 12px; font-size: 19px; }
+  #mineModal textarea { min-height: 110px; }
   .pane-body iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
   .pane-body img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .pane-body .text { padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 18px; }
@@ -106,6 +125,21 @@
   <h1>학습 결과 확인 페이지 만들기</h1>
   <p class="lead">참여 인원만큼 칸을 만들고 학습 결과(링크·이미지·글)를 넣으면, QR로 접속해 분할 화면으로 볼 수 있는 주소가 만들어집니다. 각 칸은 누르면 확대·축소됩니다.</p>
 
+  <div class="card" id="liveCard">
+    <h2>① 학생이 직접 올리기 (실시간 방)</h2>
+    <p class="hint" style="margin:0 0 10px">방을 만들어 QR을 띄우면, 학생이 각자 접속해 자기 웹 학습 결과(주소·글)를 올리고 모두의 분할 화면에 바로 나타납니다.</p>
+    <div class="row">
+      <div class="grow">
+        <label for="roomTitle">방 제목</label>
+        <input type="text" id="roomTitle" maxlength="60" placeholder="예: 2학년 3반 탐구 결과 공유">
+      </div>
+      <button class="primary" id="makeRoom" style="align-self:flex-end">실시간 방 만들기</button>
+    </div>
+    <p class="hint" id="myRooms" hidden></p>
+    <p class="hint">올린 이름과 내용은 공개 중계 서버(broker.emqx.io)를 거쳐 전달되며, 방 주소를 아는 사람은 누구나 볼 수 있습니다. 실명 대신 번호·별명을 쓰고 개인정보는 올리지 않도록 안내해 주세요. 내용은 서버가 아니라 방에 접속한 기기들에 저장되므로, 수업 뒤에도 남겨 두려면 방에서 <b>주소로 저장</b>을 눌러 고정 주소·QR로 만들어 두세요.</p>
+  </div>
+
+  <h2>② 교사가 직접 입력해서 만들기</h2>
   <div class="card">
     <div class="row">
       <div class="grow">
@@ -169,7 +203,8 @@
     <a href="https://github.com/kazuhikoarase/qrcode-generator" target="_blank" rel="noopener">qrcode-generator</a> ·
     <a href="https://github.com/pieroxy/lz-string" target="_blank" rel="noopener">lz-string</a> ·
     <a href="https://github.com/SortableJS/Sortable" target="_blank" rel="noopener">SortableJS</a> ·
-    <a href="https://github.com/timmywil/panzoom" target="_blank" rel="noopener">Panzoom</a>
+    <a href="https://github.com/timmywil/panzoom" target="_blank" rel="noopener">Panzoom</a> ·
+    <a href="https://github.com/mqttjs/MQTT.js" target="_blank" rel="noopener">MQTT.js</a>
   </footer>
 </main>
 
@@ -177,22 +212,42 @@
 <div id="viewer" hidden>
   <div id="bar">
     <h1 id="vTitle"></h1>
+    <span id="vStatus" hidden></span>
     <span id="vCols" hidden>
       <button class="small" id="colsDown" aria-label="열 줄이기">−</button>
       <span id="colsLabel"></span>
       <button class="small" id="colsUp" aria-label="열 늘리기">+</button>
     </span>
     <button class="small" id="vLayout" title="분할 방향 바꾸기">분할 전환</button>
+    <button class="small primary" id="vMine" hidden>내 결과 올리기</button>
+    <button class="small" id="vSave" hidden title="지금 올라온 결과를 고정 주소·QR로 저장">주소로 저장</button>
     <button class="small" id="vQr">QR</button>
     <button class="small" id="vEdit">편집</button>
   </div>
   <div id="stage"></div>
 </div>
 
+<div id="mineModal" hidden>
+  <div class="box">
+    <h2>내 학습 결과 올리기</h2>
+    <label for="mineName">이름 (번호·별명도 좋아요)</label>
+    <input type="text" id="mineName" maxlength="40" placeholder="예: 7번, 하늘">
+    <label for="mineContent" style="margin-top:10px">학습 결과 (웹 주소 또는 글)</label>
+    <textarea id="mineContent" maxlength="2000" placeholder="https://… 로 시작하는 내 결과물 주소를 붙여넣거나, 글을 직접 적으세요."></textarea>
+    <p class="hint">올린 내용은 이 방의 모든 사람 화면에 보입니다. 다시 올리면 내 칸이 바뀝니다.</p>
+    <div class="row" style="margin-top:12px">
+      <button id="mineDelete" hidden>내 결과 지우기</button>
+      <span class="grow"></span>
+      <button id="mineCancel">닫기</button>
+      <button class="primary" id="mineSend">올리기</button>
+    </div>
+  </div>
+</div>
+
 <div id="qrModal" hidden>
   <div class="box">
     <canvas id="qrBig"></canvas>
-    <p>QR을 찍으면 이 화면이 열립니다 · 아무 곳이나 누르면 닫힘</p>
+    <p id="qrHint">QR을 찍으면 이 화면이 열립니다 · 아무 곳이나 누르면 닫힘</p>
   </div>
 </div>
 
@@ -288,7 +343,8 @@
     if (pane._onMax) pane._onMax(on);
   }
 
-  function buildPane(item, idx) {
+  function buildPane(item, idx, opts) {
+    opts = opts || {};
     var info = interpret(item[1]);
     var pane = document.createElement('section'); pane.className = 'pane';
     var head = document.createElement('div'); head.className = 'pane-head';
@@ -302,6 +358,11 @@
       head.appendChild(a);
     }
     var toggle = function () { setMax(pane, !pane.classList.contains('max')); };
+    if (opts.onDelete) {
+      var del = document.createElement('button'); del.textContent = '삭제'; del.title = '이 칸을 방에서 지우기';
+      del.onclick = function (e) { e.stopPropagation(); if (confirm('"' + name.textContent + '" 칸을 지울까요?')) opts.onDelete(); };
+      head.appendChild(del);
+    }
     var mx = document.createElement('button'); mx.className = 'zoom-btn'; mx.textContent = '확대';
     head.appendChild(mx);
     head.onclick = toggle;            // 이름 줄 어디를 눌러도 확대/축소
@@ -309,6 +370,8 @@
     var body = document.createElement('div'); body.className = 'pane-body';
     if (info.kind === 'frame') {
       var f = document.createElement('iframe');
+      // 학생이 올린 주소는 페이지가 화면 전체를 다른 곳으로 이동시키지 못하게 제한한다
+      if (opts.sandbox) f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-presentation allow-downloads allow-modals');
       f.src = info.src; f.loading = 'lazy';
       f.allow = 'fullscreen; picture-in-picture'; f.allowFullscreen = true;
       f.title = name.textContent;
@@ -364,7 +427,7 @@
 
   function renderView() {
     var stage = $('stage'); stage.innerHTML = '';
-    var panes = current.p.map(buildPane);
+    var panes = current.p.map(function (x, i) { return buildPane(x, i); });
     var root = document.createElement('div');
     stage.appendChild(root);
     var cols = Math.min(panes.length, viewCols || autoCols(panes.length));
@@ -383,7 +446,15 @@
     }
   }
 
+  function barMode(isLive) {
+    ['vStatus', 'vMine'].forEach(function (id) { $(id).hidden = !isLive; });
+    $('vSave').hidden = !(isLive && live.host);
+    $('vLayout').hidden = isLive; $('vEdit').hidden = isLive;
+    $('qrHint').textContent = isLive ? 'QR을 찍고 내 학습 결과를 올려 주세요 · 아무 곳이나 누르면 닫힘'
+                                     : 'QR을 찍으면 이 화면이 열립니다 · 아무 곳이나 누르면 닫힘';
+  }
   function showViewer(state) {
+    barMode(false);
     current = state;
     // 세로로 긴 휴대폰 화면에서 '좌우'는 너무 좁으므로 위아래로 시작
     viewLayout = (state.l === 'c' && isNarrow()) ? 'r' : state.l;
@@ -400,24 +471,236 @@
     renderView();
   };
   function stepCols(d) {
-    var n = current.p.length, now = Math.min(n, viewCols || autoCols(n));
+    var n = live ? liveIds().length : current.p.length, now = Math.min(n, viewCols || autoCols(n));
     viewCols = Math.max(1, Math.min(n, now + d));
-    renderView();
+    if (live) renderLive(); else renderView();
   }
   $('colsDown').onclick = function () { stepCols(-1); };
   $('colsUp').onclick = function () { stepCols(1); };
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
     if (!$('qrModal').hidden) { $('qrModal').hidden = true; return; }
+    if (!$('mineModal').hidden) { $('mineModal').hidden = true; return; }
     var open = document.querySelector('.pane.max');
     if (open) setMax(open, false);
   });
   $('vQr').onclick = function () {
-    try { drawQr($('qrBig'), baseUrl() + '#d=' + encode(current), 520); $('qrModal').hidden = false; }
+    try { drawQr($('qrBig'), live ? roomUrl(live.room) : baseUrl() + '#d=' + encode(current), 520); $('qrModal').hidden = false; }
     catch (e) { alert('내용이 너무 길어 QR로 만들 수 없습니다.'); }
   };
   $('qrModal').onclick = function () { $('qrModal').hidden = true; };
   $('vEdit').onclick = function () { location.hash = '#e=' + encode(current); };
+
+  /* ---------- 실시간 방: 학생이 각자 올린 결과를 모두의 분할 화면에 공유 ----------
+     MQTT.js 로 공개 중계 서버에 접속해 같은 방(topic)에 있는 기기끼리 메시지를 주고받는다.
+     중계 서버의 '보관(retain)' 기능은 믿을 수 없어서(시험해 보니 전달이 빠지는 경우가 있음) 다음처럼 맞춘다.
+       - 누군가 들어오면 hello 를 보내고, 방에 있던 기기가 자기가 아는 전체 상태(sync)를 보내 준다.
+       - 칸마다 수정 시각 u 를 두고 더 새로운 것만 받아들인다. 삭제는 내용이 빈 칸(c === '')으로 남긴다.
+       - 각 기기는 방 상태를 localStorage 에도 저장해, 새로고침해도 이어서 볼 수 있다. */
+  var BROKER = 'wss://broker.emqx.io:8084/mqtt', TOPIC = 'lrv1/';
+  var live = null, mem = {};
+
+  function store(k, v) {
+    try {
+      if (v === undefined) return JSON.parse(localStorage.getItem(k));
+      localStorage.setItem(k, JSON.stringify(v));
+    } catch (e) { if (v === undefined) return mem[k] === undefined ? null : mem[k]; mem[k] = v; }
+    return v;
+  }
+  function rand(n) {
+    var a = 'abcdefghjkmnpqrstuvwxyz23456789', b = new Uint8Array(n), o = '';
+    crypto.getRandomValues(b);
+    for (var i = 0; i < n; i++) o += a[b[i] % a.length];
+    return o;
+  }
+  function myId() { return store('lrv-id') || store('lrv-id', rand(12)); }
+  function roomUrl(room) { return baseUrl() + '#r=' + room; }
+  function loadScript(src) {
+    return new Promise(function (ok, fail) {
+      if (window.mqtt) return ok();
+      var el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = fail;
+      document.head.appendChild(el);
+    });
+  }
+  function setStatus(text, bad) { $('vStatus').textContent = text; $('vStatus').classList.toggle('bad', !!bad); }
+  function liveTitle() { return (live.meta && live.meta.t) || '학습 결과 공유'; }
+  function myEntry() { var e = live.entries[live.id]; return e && e.c ? e : null; }
+  function liveIds() {      // 지워지지 않은 칸을 올린 순서대로
+    var e = live.entries;
+    return Object.keys(e).filter(function (id) { return e[id].c; })
+      .sort(function (a, b) { return (e[a].ts - e[b].ts) || (a < b ? -1 : 1); }).slice(0, MAX_PANELS);
+  }
+
+  function renderLive() {
+    var L = live, ids = liveIds(), grid = L.grid;
+    Object.keys(L.panes).forEach(function (id) {
+      if (ids.indexOf(id) < 0) { L.panes[id].el.remove(); delete L.panes[id]; }
+    });
+    ids.forEach(function (id, i) {
+      var e = L.entries[id], key = e.n + '\n' + e.c, p = L.panes[id];
+      if (!p || p.key !== key) {       // 새로 올라왔거나 내용이 바뀐 칸만 다시 만든다 (다른 칸은 새로고침되지 않음)
+        var el = buildPane([(e.n || '이름 없음') + (id === L.id ? ' (나)' : ''), e.c], i, {
+          sandbox: true,
+          onDelete: (L.host && id !== L.id) ? function () { putEntry(id, { n: e.n, c: '', ts: e.ts }); } : null
+        });
+        if (p) grid.replaceChild(el, p.el); else grid.appendChild(el);
+        p = L.panes[id] = { key: key, el: el };
+      }
+      if (grid.children[i] !== p.el) grid.insertBefore(p.el, grid.children[i]);
+    });
+    var n = ids.length, cols = Math.max(1, Math.min(n, viewCols || autoCols(n)));
+    grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+    grid.style.gridTemplateRows = 'repeat(' + Math.max(1, Math.ceil(n / cols)) + ', minmax(0, 1fr))';
+    grid.hidden = n === 0; L.empty.hidden = n > 0;
+    $('vCols').hidden = n < 2;
+    $('colsLabel').textContent = cols + '열';
+    $('colsDown').disabled = cols <= 1; $('colsUp').disabled = cols >= n;
+    $('vTitle').textContent = liveTitle() + (n ? ' · ' + n + '명' : '');
+    document.title = liveTitle();
+    $('vMine').textContent = myEntry() ? '내 결과 수정' : '내 결과 올리기';
+  }
+
+  // --- 상태 합치기: 더 새로운(u 가 큰) 것만 받아들인다 ---
+  function mergeEntry(id, d) {
+    if (!/^[a-z0-9]{6,20}$/.test(id) || !d || typeof d.c !== 'string' || !(+d.u > 0)) return false;
+    var old = live.entries[id];
+    if (old && old.u >= +d.u) return false;
+    live.entries[id] = { n: String(d.n || '').slice(0, 40), c: d.c.slice(0, 2000), ts: +d.ts || +d.u, u: +d.u };
+    return true;
+  }
+  function mergeMeta(d) {
+    if (!d || typeof d.t !== 'string' || !(+d.u > 0)) return false;
+    if (live.meta && live.meta.u >= +d.u) return false;
+    live.meta = { t: d.t.slice(0, 60), u: +d.u };
+    return true;
+  }
+  function changed() { store('lrv-room-' + live.room, { m: live.meta, e: live.entries }); renderLive(); }
+  function connected() { return !!(live && live.client && live.client.connected); }
+  function pub(sub, obj, retain) {
+    live.client.publish(TOPIC + live.room + '/' + sub, JSON.stringify(obj), { qos: 1, retain: !!retain });
+  }
+  function pubSync() { if (connected()) pub('sync', { m: live.meta, e: live.entries }); }
+  // 칸 하나를 올리기·수정·삭제(c 를 빈 값으로)
+  function putEntry(id, f) {
+    if (!connected()) { alert('아직 연결되지 않았습니다. 잠시 후 다시 시도해 주세요.'); return false; }
+    var old = live.entries[id];
+    var d = { n: f.n, c: f.c, ts: f.ts || Date.now(), u: Math.max(Date.now(), old ? old.u + 1 : 0) };
+    pub('s/' + id, d, true);
+    mergeEntry(id, d); changed();
+    return true;
+  }
+
+  function onLiveMessage(L, sub, text) {
+    var d, m;
+    try { d = JSON.parse(text); } catch (e) { return; }
+    if (sub === 'hello') {            // 누가 들어옴 → 내가 아는 전체 상태를 보내 준다 (교사 기기가 가장 먼저 답함)
+      if (d === L.session) return;
+      clearTimeout(L.syncTimer);
+      L.syncTimer = setTimeout(function () { if (live === L) pubSync(); }, L.host ? Math.random() * 150 : 300 + Math.random() * 900);
+      return;
+    }
+    if (sub === 'meta') { if (mergeMeta(d)) changed(); return; }
+    if (sub === 'sync') {
+      if (!d || typeof d !== 'object') return;
+      var theirs = (d.e && typeof d.e === 'object') ? d.e : {}, ch = mergeMeta(d.m);
+      Object.keys(theirs).slice(0, 300).forEach(function (id) { if (mergeEntry(id, theirs[id])) ch = true; });
+      // 방금 온 상태에 없는 더 새로운 내용이 내게 없다면, 내가 또 보낼 필요는 없다
+      var extra = Object.keys(L.entries).some(function (id) { return !theirs[id] || !(+theirs[id].u >= L.entries[id].u); }) ||
+                  (L.meta && !(d.m && +d.m.u >= L.meta.u));
+      if (!extra) clearTimeout(L.syncTimer);
+      if (ch) changed();
+      return;
+    }
+    if ((m = /^s\/([a-z0-9]{6,20})$/.exec(sub)) && mergeEntry(m[1], d)) changed();
+  }
+
+  function showLive(room) {
+    if (live && live.room === room) return;
+    stopLive();
+    var hosts = store('lrv-host') || {}, saved = store('lrv-room-' + room);
+    var L = live = { room: room, id: myId(), session: rand(8), host: !!hosts[room], meta: null,
+                     entries: {}, panes: {}, client: null, asked: false, syncTimer: 0 };
+    if (L.host) mergeMeta({ t: hosts[room].t, u: hosts[room].at });
+    if (saved) {                       // 이 기기에 저장해 둔 방 상태 복원
+      mergeMeta(saved.m);
+      Object.keys(saved.e || {}).forEach(function (id) { mergeEntry(id, saved.e[id]); });
+    }
+    $('editor').hidden = true; $('viewer').hidden = false;
+    barMode(true); viewCols = 0;
+    var stage = $('stage'); stage.innerHTML = '';
+    L.grid = document.createElement('div'); L.grid.className = 'livegrid';
+    L.empty = document.createElement('div'); L.empty.className = 'live-empty';
+    var cv = document.createElement('canvas'), p1 = document.createElement('p'), sm = document.createElement('small');
+    p1.textContent = 'QR을 찍고 「내 결과 올리기」를 눌러 주세요';
+    sm.textContent = roomUrl(room);
+    L.empty.appendChild(cv); L.empty.appendChild(p1); L.empty.appendChild(sm);
+    stage.appendChild(L.grid); stage.appendChild(L.empty);
+    try { drawQr(cv, roomUrl(room), 340); } catch (e) { cv.hidden = true; }
+    renderLive();
+    setStatus('연결 중…');
+
+    loadScript('vendor/mqtt.min.js').then(function () {
+      if (live !== L) return;
+      var c = L.client = mqtt.connect(BROKER, { clientId: 'lrv_' + rand(10), clean: true, reconnectPeriod: 3000, connectTimeout: 10000 });
+      c.on('connect', function () {
+        if (live !== L) return;
+        setStatus('● 실시간 연결됨');
+        c.subscribe(TOPIC + room + '/#', { qos: 1 }, function () {
+          if (live !== L || !c.connected) return;
+          pub('hello', L.session);                         // 방에 있던 기기들에게 현재 상태를 요청
+          if (L.host && L.meta) pub('meta', L.meta, true);
+          // 내가 갖고 있던 상태도 알려 준다 (끊겨 있던 동안 올린 내용, 새로고침 전 내용 등)
+          if (L.meta || Object.keys(L.entries).length) setTimeout(function () { if (live === L) pubSync(); }, 1500);
+        });
+        setTimeout(function () {       // 학생이 처음 들어오면 바로 올리기 창을 띄운다
+          if (live !== L || !c.connected) return;
+          if (!L.asked && !L.host && !myEntry()) openMine();
+          L.asked = true;
+        }, 2500);
+      });
+      c.on('reconnect', function () { if (live === L) setStatus('다시 연결 중…', true); });
+      c.on('close', function () { if (live === L) setStatus('연결 끊김', true); });
+      c.on('error', function () { if (live === L) setStatus('연결 오류', true); });
+      c.on('message', function (topic, payload) {
+        if (live === L) onLiveMessage(L, topic.slice((TOPIC + room + '/').length), payload.toString());
+      });
+    }).catch(function () { if (live === L) setStatus('실시간 기능을 불러오지 못했습니다', true); });
+  }
+  function stopLive() {
+    if (!live) return;
+    clearTimeout(live.syncTimer);
+    if (live.client) live.client.end(true);
+    live = null; $('mineModal').hidden = true;
+  }
+
+  function openMine() {
+    var mine = myEntry();
+    $('mineName').value = mine ? mine.n : (store('lrv-name') || '');
+    $('mineContent').value = mine ? mine.c : '';
+    $('mineDelete').hidden = !mine;
+    $('mineSend').textContent = mine ? '다시 올리기' : '올리기';
+    $('mineModal').hidden = false;
+    ($('mineName').value ? $('mineContent') : $('mineName')).focus();
+  }
+  $('vMine').onclick = openMine;
+  $('mineCancel').onclick = function () { $('mineModal').hidden = true; };
+  $('mineSend').onclick = function () {
+    var n = $('mineName').value.trim(), c = $('mineContent').value.trim(), mine = myEntry();
+    if (!c) { alert('학습 결과(웹 주소 또는 글)를 입력해 주세요.'); return; }
+    if (!mine && liveIds().length >= MAX_PANELS) { alert('이 방은 최대 ' + MAX_PANELS + '명까지 올릴 수 있습니다.'); return; }
+    store('lrv-name', n);
+    if (putEntry(live.id, { n: n, c: c, ts: mine ? mine.ts : Date.now() })) $('mineModal').hidden = true;
+  };
+  $('mineDelete').onclick = function () {
+    var mine = myEntry();
+    if (mine && confirm('내가 올린 결과를 지울까요?') && putEntry(live.id, { n: mine.n, c: '', ts: mine.ts })) $('mineModal').hidden = true;
+  };
+  $('vSave').onclick = function () {
+    var ids = liveIds();
+    if (!ids.length) { alert('아직 올라온 결과가 없습니다.'); return; }
+    var st = { t: liveTitle(), l: 'g', p: ids.map(function (id) { return [live.entries[id].n, live.entries[id].c]; }) };
+    location.hash = '#e=' + encode(st);     // 만들기 화면으로 옮겨 고정 주소·QR 을 만든다
+  };
 
   /* ---------- 만들기 화면 ---------- */
   function addPanelCard(name, content) {
@@ -494,7 +777,25 @@
     return { t: $('title').value.trim(), l: $('layout').value, p: p };
   }
 
+  function listMyRooms() {
+    var hosts = store('lrv-host') || {}, box = $('myRooms');
+    var rooms = Object.keys(hosts).sort(function (a, b) { return hosts[b].at - hosts[a].at; }).slice(0, 5);
+    box.hidden = !rooms.length; box.textContent = rooms.length ? '내가 만든 방 다시 열기: ' : '';
+    rooms.forEach(function (r, i) {
+      var a = document.createElement('a'); a.href = '#r=' + r; a.textContent = hosts[r].t || '학습 결과 공유';
+      if (i) box.appendChild(document.createTextNode(' · '));
+      box.appendChild(a);
+    });
+  }
+  $('makeRoom').onclick = function () {
+    var hosts = store('lrv-host') || {}, room = rand(10);
+    hosts[room] = { t: $('roomTitle').value.trim() || '학습 결과 공유', at: Date.now() };
+    store('lrv-host', hosts);
+    location.hash = '#r=' + room;
+  };
+
   function showEditor(state) {
+    listMyRooms();
     $('viewer').hidden = true; $('editor').hidden = false; $('result').hidden = true;
     document.title = '학습 결과 확인 페이지 만들기';
     $('panels').innerHTML = '';
@@ -541,6 +842,9 @@
 
   /* ---------- 라우팅 ---------- */
   function route() {
+    var r = /^#r=([a-z0-9]{6,20})$/.exec(location.hash);
+    if (r) { showLive(r[1]); return; }
+    stopLive();
     var h = readHash();
     if (h && h.state && h.mode === 'd' && h.state.p.length) showViewer(h.state);
     else showEditor(h && h.state);
