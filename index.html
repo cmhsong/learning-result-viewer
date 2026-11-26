@@ -60,7 +60,28 @@
   .pane-head .name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pane-head a, .pane-head button { font-size: 13px; font-weight: 400; color: var(--sub); text-decoration: none;
     border: 0; background: none; padding: 2px 6px; }
-  .pane-body { flex: 1; min-height: 0; overflow: auto; }
+  .pane-head { cursor: zoom-in; user-select: none; }
+  .pane.max .pane-head { cursor: zoom-out; font-size: 16px; padding: 6px 10px; }
+  .pane:not(.max):hover .pane-head .name { color: var(--accent); }
+  .pane.max .pane-head .zoom-btn { color: var(--accent-ink); background: var(--accent); border-radius: 6px; padding: 3px 12px; }
+  .zoom-tools { display: none; gap: 4px; }
+  .pane.max .zoom-tools { display: flex; }
+  .pane-head .zoom-tools button { border: 1px solid var(--line); border-radius: 6px; min-width: 30px; color: var(--ink); }
+  .pane-body { flex: 1; min-height: 0; overflow: auto; position: relative; }
+  .pane-body.clicky { cursor: zoom-in; }
+  .pane.max .pane-body.clicky.text-body { cursor: zoom-out; }
+  .pane.max .pane-body .text { font-size: 26px; padding: 24px 28px; }
+  /* 분할 상태에서는 칸 전체가 '눌러서 확대' 영역. 확대하면 사라져 안쪽 내용을 조작할 수 있다 */
+  .zoom-catch { position: absolute; inset: 0; cursor: zoom-in; }
+  .pane.max .zoom-catch { display: none; }
+  @keyframes zoomIn { from { transform: scale(.92); opacity: .4; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: no-preference) { .pane.max { animation: zoomIn .16s ease-out; } }
+  #vCols { display: flex; align-items: center; gap: 4px; font-size: 14px; color: var(--sub); flex: none; }
+  .count { display: flex; gap: 4px; }
+  .count input { width: 64px; text-align: center; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 4px; }
+  .grip { cursor: grab; padding: 2px 8px 2px 0; color: var(--sub); touch-action: none; }
+  .sortable-ghost { opacity: .35; }
+  details.card summary { cursor: pointer; font-weight: 600; }
   .pane-body iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
   .pane-body img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .pane-body .text { padding: 14px 16px; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 18px; }
@@ -83,7 +104,7 @@
 <!-- 만들기 화면 -->
 <main id="editor" hidden>
   <h1>학습 결과 확인 페이지 만들기</h1>
-  <p class="lead">학습 결과(링크·이미지·글)를 칸마다 넣으면, QR로 접속해 분할 화면으로 볼 수 있는 주소가 만들어집니다.</p>
+  <p class="lead">참여 인원만큼 칸을 만들고 학습 결과(링크·이미지·글)를 넣으면, QR로 접속해 분할 화면으로 볼 수 있는 주소가 만들어집니다. 각 칸은 누르면 확대·축소됩니다.</p>
 
   <div class="card">
     <div class="row">
@@ -92,20 +113,38 @@
         <input type="text" id="title" placeholder="예: 3모둠 탐구 활동 결과" maxlength="60">
       </div>
       <div>
+        <label for="count">참여 인원 (칸 수)</label>
+        <div class="count">
+          <button type="button" id="countDown" aria-label="한 칸 줄이기">−</button>
+          <input type="number" id="count" min="1" max="30" value="2" inputmode="numeric">
+          <button type="button" id="countUp" aria-label="한 칸 늘리기">+</button>
+        </div>
+      </div>
+      <div>
         <label for="layout">화면 분할</label>
         <select id="layout">
+          <option value="g">격자 (인원에 맞춰 자동)</option>
           <option value="c">좌우로 나란히</option>
           <option value="r">위아래로</option>
-          <option value="g">격자(2열)</option>
         </select>
       </div>
     </div>
   </div>
 
+  <details class="card" id="bulkBox">
+    <summary>여러 명 한꺼번에 붙여넣기</summary>
+    <p class="hint">한 줄에 한 명씩 적습니다. <b>이름, 주소</b> 또는 <b>주소</b>만 적어도 됩니다. 스프레드시트에서 이름·주소 두 열을 복사해 그대로 붙여넣어도 됩니다.</p>
+    <textarea id="bulk" style="min-height:110px" placeholder="김하늘, https://docs.google.com/presentation/d/…&#10;이바다, https://youtu.be/…&#10;https://example.com/result.png"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="bulkApply">칸으로 나누기</button>
+      <span class="hint" style="margin:0">지금 있는 칸은 붙여넣은 내용으로 바뀝니다</span>
+    </div>
+  </details>
+
   <div id="panels"></div>
   <div class="row" style="margin-bottom:14px">
     <button id="addPanel">+ 칸 추가</button>
-    <span class="hint" style="margin:0">최대 6칸</span>
+    <span class="hint" style="margin:0">최대 30칸 · ⠿ 를 끌면 순서가 바뀝니다 · 내용이 빈 칸은 화면에 나오지 않습니다</span>
   </div>
 
   <button class="primary" id="make" style="width:100%;padding:12px">URL · QR 만들기</button>
@@ -128,7 +167,9 @@
     사용한 오픈 소스(모두 MIT 라이선스):
     <a href="https://github.com/nathancahill/split" target="_blank" rel="noopener">Split.js</a> ·
     <a href="https://github.com/kazuhikoarase/qrcode-generator" target="_blank" rel="noopener">qrcode-generator</a> ·
-    <a href="https://github.com/pieroxy/lz-string" target="_blank" rel="noopener">lz-string</a>
+    <a href="https://github.com/pieroxy/lz-string" target="_blank" rel="noopener">lz-string</a> ·
+    <a href="https://github.com/SortableJS/Sortable" target="_blank" rel="noopener">SortableJS</a> ·
+    <a href="https://github.com/timmywil/panzoom" target="_blank" rel="noopener">Panzoom</a>
   </footer>
 </main>
 
@@ -136,6 +177,11 @@
 <div id="viewer" hidden>
   <div id="bar">
     <h1 id="vTitle"></h1>
+    <span id="vCols" hidden>
+      <button class="small" id="colsDown" aria-label="열 줄이기">−</button>
+      <span id="colsLabel"></span>
+      <button class="small" id="colsUp" aria-label="열 늘리기">+</button>
+    </span>
     <button class="small" id="vLayout" title="분할 방향 바꾸기">분할 전환</button>
     <button class="small" id="vQr">QR</button>
     <button class="small" id="vEdit">편집</button>
@@ -153,10 +199,12 @@
 <script src="vendor/lz-string.min.js"></script>
 <script src="vendor/qrcode.js"></script>
 <script src="vendor/split.min.js"></script>
+<script src="vendor/sortable.min.js"></script>
+<script src="vendor/panzoom.min.js"></script>
 <script>
 (function () {
   'use strict';
-  var MAX_PANELS = 6;
+  var MAX_PANELS = 30;
   var $ = function (id) { return document.getElementById(id); };
 
   /* ---------- 상태 <-> 주소 ---------- */
@@ -170,7 +218,7 @@
       if (!s || !Array.isArray(s.p)) return null;
       return {
         t: String(s.t || ''),
-        l: ['c', 'r', 'g'].indexOf(s.l) >= 0 ? s.l : 'c',
+        l: ['c', 'r', 'g'].indexOf(s.l) >= 0 ? s.l : 'g',
         p: s.p.slice(0, MAX_PANELS).map(function (x) { return [String(x[0] || ''), String(x[1] || '')]; })
       };
     } catch (e) { return null; }
@@ -225,7 +273,20 @@
   }
 
   /* ---------- 보기 화면 ---------- */
-  var current = null, viewLayout = 'c';
+  var current = null, viewLayout = 'g', viewCols = 0;   // viewCols 0 = 인원에 맞춰 자동
+
+  function isNarrow() { return window.innerWidth < 640 && window.innerHeight > window.innerWidth; }
+  function autoCols(n) {
+    if (isNarrow()) return n <= 3 ? 1 : (n <= 12 ? 2 : 3);   // 세로로 긴 휴대폰
+    return Math.ceil(Math.sqrt(n));                          // 2명→2열, 5~9명→3열, 10~16명→4열 …
+  }
+  function setMax(pane, on) {
+    var open = document.querySelector('.pane.max');
+    if (open && open !== pane) setMax(open, false);
+    pane.classList.toggle('max', on);
+    pane.querySelector('.zoom-btn').textContent = on ? '축소' : '확대';
+    if (pane._onMax) pane._onMax(on);
+  }
 
   function buildPane(item, idx) {
     var info = interpret(item[1]);
@@ -237,14 +298,14 @@
     if (info.href) {
       var a = document.createElement('a');
       a.href = info.href; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = '새 탭 ↗';
+      a.onclick = function (e) { e.stopPropagation(); };
       head.appendChild(a);
     }
-    var mx = document.createElement('button'); mx.textContent = '크게';
-    mx.onclick = function () {
-      var on = pane.classList.toggle('max');
-      mx.textContent = on ? '분할로' : '크게';
-    };
+    var toggle = function () { setMax(pane, !pane.classList.contains('max')); };
+    var mx = document.createElement('button'); mx.className = 'zoom-btn'; mx.textContent = '확대';
     head.appendChild(mx);
+    head.onclick = toggle;            // 이름 줄 어디를 눌러도 확대/축소
+    head.title = '누르면 확대/축소';
     var body = document.createElement('div'); body.className = 'pane-body';
     if (info.kind === 'frame') {
       var f = document.createElement('iframe');
@@ -252,13 +313,39 @@
       f.allow = 'fullscreen; picture-in-picture'; f.allowFullscreen = true;
       f.title = name.textContent;
       body.appendChild(f);
+      // 웹페이지 칸은 클릭이 안쪽 페이지로 들어가 버리므로, 분할 상태에서는 투명 막이 클릭을 받아 확대한다
+      var catcher = document.createElement('div'); catcher.className = 'zoom-catch';
+      catcher.title = '누르면 확대'; catcher.onclick = toggle;
+      body.appendChild(catcher);
     } else if (info.kind === 'image') {
       var img = document.createElement('img'); img.src = info.src; img.alt = name.textContent;
-      img.referrerPolicy = 'no-referrer';
+      img.referrerPolicy = 'no-referrer'; img.draggable = false;
       body.appendChild(img);
+      body.classList.add('clicky'); body.style.overflow = 'hidden';
+      body.onclick = function () { if (!pane.classList.contains('max')) toggle(); };
+      // 확대한 이미지는 Panzoom 으로 휠·두 손가락·버튼 확대/축소, 끌어서 이동
+      var pz = null, tools = document.createElement('span'); tools.className = 'zoom-tools';
+      [['−', '이미지 축소', function () { pz && pz.zoomOut(); }],
+       ['＋', '이미지 확대', function () { pz && pz.zoomIn(); }],
+       ['맞춤', '원래 크기로', function () { pz && pz.reset(); }]].forEach(function (d) {
+        var b = document.createElement('button'); b.textContent = d[0]; b.title = d[1]; b.setAttribute('aria-label', d[1]);
+        b.onclick = function (e) { e.stopPropagation(); d[2](); };
+        tools.appendChild(b);
+      });
+      head.insertBefore(tools, mx);
+      pane._onMax = function (on) {
+        if (on) {
+          pz = Panzoom(img, { maxScale: 8, minScale: 1, step: 0.4, cursor: 'grab' });
+          body.onwheel = pz.zoomWithWheel;
+        } else if (pz) {
+          body.onwheel = null; pz.reset({ animate: false }); pz.destroy(); pz = null;
+          img.style.transform = ''; img.style.cursor = '';
+        }
+      };
     } else {
       var t = document.createElement('div'); t.className = 'text'; t.textContent = info.text;
       body.appendChild(t);
+      body.classList.add('clicky', 'text-body'); body.onclick = toggle;
     }
     pane.appendChild(head); pane.appendChild(body);
     return pane;
@@ -269,7 +356,7 @@
     children.forEach(function (c) { container.appendChild(c); });
     if (children.length < 2) { children[0].style.flex = '1'; return; }
     Split(children, {
-      direction: direction, gutterSize: 10, minSize: 50, snapOffset: 0,
+      direction: direction, gutterSize: children.length > 4 ? 6 : 10, minSize: 30, snapOffset: 0,
       onDragStart: function () { $('stage').classList.add('dragging'); },
       onDragEnd: function () { $('stage').classList.remove('dragging'); }
     });
@@ -280,14 +367,17 @@
     var panes = current.p.map(buildPane);
     var root = document.createElement('div');
     stage.appendChild(root);
-    if (viewLayout === 'g' && panes.length > 2) {
+    var cols = Math.min(panes.length, viewCols || autoCols(panes.length));
+    $('vCols').hidden = !(viewLayout === 'g' && panes.length > 1);
+    $('colsLabel').textContent = cols + '열';
+    $('colsDown').disabled = cols <= 1; $('colsUp').disabled = cols >= panes.length;
+    if (viewLayout === 'g' && cols === 1) {
+      splitOf(root, panes, 'vertical');
+    } else if (viewLayout === 'g' && cols < panes.length) {
       var rows = [];
-      for (var i = 0; i < panes.length; i += 2) {
-        var row = document.createElement('div');
-        rows.push(row);
-      }
+      for (var i = 0; i < panes.length; i += cols) rows.push(document.createElement('div'));
       splitOf(root, rows, 'vertical');
-      rows.forEach(function (row, k) { splitOf(row, panes.slice(k * 2, k * 2 + 2), 'horizontal'); });
+      rows.forEach(function (row, k) { splitOf(row, panes.slice(k * cols, k * cols + cols), 'horizontal'); });
     } else {
       splitOf(root, panes, viewLayout === 'r' ? 'vertical' : 'horizontal');
     }
@@ -296,7 +386,8 @@
   function showViewer(state) {
     current = state;
     // 세로로 긴 휴대폰 화면에서 '좌우'는 너무 좁으므로 위아래로 시작
-    viewLayout = (state.l === 'c' && window.innerWidth < 640 && window.innerHeight > window.innerWidth) ? 'r' : state.l;
+    viewLayout = (state.l === 'c' && isNarrow()) ? 'r' : state.l;
+    viewCols = 0;
     $('editor').hidden = true; $('viewer').hidden = false;
     $('vTitle').textContent = state.t || '학습 결과 확인';
     document.title = state.t || '학습 결과 확인';
@@ -304,10 +395,23 @@
   }
 
   $('vLayout').onclick = function () {
-    var order = current.p.length > 2 ? ['c', 'r', 'g'] : ['c', 'r'];
+    var order = ['g', 'c', 'r'];
     viewLayout = order[(order.indexOf(viewLayout) + 1) % order.length];
     renderView();
   };
+  function stepCols(d) {
+    var n = current.p.length, now = Math.min(n, viewCols || autoCols(n));
+    viewCols = Math.max(1, Math.min(n, now + d));
+    renderView();
+  }
+  $('colsDown').onclick = function () { stepCols(-1); };
+  $('colsUp').onclick = function () { stepCols(1); };
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!$('qrModal').hidden) { $('qrModal').hidden = true; return; }
+    var open = document.querySelector('.pane.max');
+    if (open) setMax(open, false);
+  });
   $('vQr').onclick = function () {
     try { drawQr($('qrBig'), baseUrl() + '#d=' + encode(current), 520); $('qrModal').hidden = false; }
     catch (e) { alert('내용이 너무 길어 QR로 만들 수 없습니다.'); }
@@ -321,7 +425,7 @@
     if (wrap.children.length >= MAX_PANELS) return;
     var card = document.createElement('div'); card.className = 'card panel';
     card.innerHTML =
-      '<div class="panel-head"><span class="no"></span><button class="small del">삭제</button></div>' +
+      '<div class="panel-head"><span><span class="grip" title="끌어서 순서 바꾸기">⠿</span><span class="no"></span></span><button class="small del">삭제</button></div>' +
       '<label>이름</label><input type="text" class="p-name" maxlength="40" placeholder="예: 1모둠, 홍길동">' +
       '<label style="margin-top:10px">학습 결과 (웹 주소 또는 글)</label>' +
       '<textarea class="p-content" placeholder="https://… 로 시작하는 주소(웹페이지·구글 문서/슬라이드·유튜브·이미지)를 넣거나, 글을 직접 적으세요."></textarea>';
@@ -338,7 +442,48 @@
       cards[i].querySelector('.del').hidden = cards.length <= 1;
     }
     $('addPanel').disabled = cards.length >= MAX_PANELS;
+    $('count').value = cards.length;
+    $('countDown').disabled = cards.length <= 1; $('countUp').disabled = cards.length >= MAX_PANELS;
   }
+  // 참여 인원에 맞춰 칸 수를 늘리거나 줄인다 (줄일 때는 뒤에서부터)
+  function setCount(n) {
+    var wrap = $('panels');
+    n = Math.max(1, Math.min(MAX_PANELS, Math.round(n) || 1));
+    var doomed = Array.prototype.slice.call(wrap.children, n);
+    var filled = doomed.filter(function (c) { return c.querySelector('.p-content').value.trim(); }).length;
+    if (filled && !confirm('내용이 입력된 칸 ' + filled + '개가 삭제됩니다. 줄일까요?')) { renumber(); return; }
+    doomed.forEach(function (c) { c.remove(); });
+    while (wrap.children.length < n) addPanelCard();
+    renumber();
+  }
+  $('count').onchange = function () { setCount(+this.value); };
+  $('countDown').onclick = function () { setCount($('panels').children.length - 1); };
+  $('countUp').onclick = function () { setCount($('panels').children.length + 1); };
+  Sortable.create($('panels'), { handle: '.grip', animation: 150, onEnd: renumber });   // 끌어서 순서 바꾸기
+
+  // 한꺼번에 붙여넣기: "이름<탭>주소", "이름, 주소", "주소" 를 한 줄씩 해석
+  function parseBulk(text) {
+    var out = [];
+    text.split(/\r?\n/).forEach(function (line) {
+      line = line.trim();
+      if (!line) return;
+      var m;
+      if (line.indexOf('\t') >= 0) { var i = line.indexOf('\t'); out.push([line.slice(0, i).trim(), line.slice(i + 1).trim()]); }
+      else if ((m = /^(.*?)[\s,]+(https?:\/\/\S+)$/i.exec(line))) out.push([m[1].trim(), m[2]]);
+      else out.push(['', line]);
+    });
+    return out.filter(function (x) { return x[1]; });
+  }
+  $('bulkApply').onclick = function () {
+    var items = parseBulk($('bulk').value);
+    if (!items.length) { alert('붙여넣은 내용이 없습니다.'); return; }
+    var over = items.length - MAX_PANELS;
+    $('panels').innerHTML = '';
+    items.slice(0, MAX_PANELS).forEach(function (x) { addPanelCard(x[0], x[1]); });
+    renumber();
+    $('bulk').value = ''; $('bulkBox').open = false;
+    if (over > 0) alert('최대 ' + MAX_PANELS + '칸까지만 넣었습니다. (' + over + '줄 제외)');
+  };
   function collect() {
     var p = [];
     Array.prototype.forEach.call($('panels').children, function (card) {
